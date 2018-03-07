@@ -5,7 +5,8 @@
             [clj-time.core :as ct]
             [clj-http.client :as clj-http]
             [throttler.core :refer [throttle-fn]]
-            [oauth.client :as oauth.client]))
+            [oauth.client :as oauth.client])
+  (:import [java.net URLEncoder]))
 
 (defn public-consumer
   "Returns an oauth consumer, usable for obtaining authorisation for a public user to their xero organisation."
@@ -123,10 +124,16 @@
   (zipmap (map (comp lettercase/lower-keyword name) (keys params)) (vals params)))
 
 (defn- do-request-for-auth-type
-  [request-fn url headers query-params body input-stream]
-  (request-fn url (merge {:headers headers
-                          :query-params query-params}
-                         (if body {:form-params {:json body}} {:body input-stream}))))
+  [request-fn url headers query-params body body-type input-stream]
+  (let [out-opts (merge {:headers headers
+                         :query-params query-params}
+                        (if body
+                          {:form-params (case body-type
+                                          :xml {:xml body}
+                                          :json {:json body}
+                                          {:json body})}
+                          {:body input-stream}))]
+    (request-fn url (assoc out-opts :debug true :debug-body true))))
 
 (defn- private-credentials? [credentials]
   (contains? credentials :consumer))
@@ -142,21 +149,45 @@
       (private-credentials? credentials)))
 
 (defn- do-request*
-  [request-method endpoint credentials & {:keys [params body guid modified-since attachments filename input-stream page offset]}]
+  [request-method endpoint credentials & {:keys [params body guid modified-since item
+                                                 attachments filename input-stream page offset]}]
   {:pre [(map? credentials) (valid-credentials-for-auth-type? credentials)]}
-  (let [url (str (or (:base-api-url credentials) base-api-url) (lettercase/capitalized-name endpoint) (when guid (str "/" guid))
-                 (when attachments (str "/" attachments )) (when filename (str "/" filename)))
+  (let [url (str (or (:base-api-url credentials) base-api-url)
+                 (lettercase/capitalized-name endpoint)
+                 (when guid (str "/" guid))
+                 (when item (str "/" (first item) "/" (second item)))
+                 (when attachments (str "/" attachments ))
+                 (when filename (str "/" filename)))
         request-fn ({:GET clj-http/get :POST clj-http/post :PUT clj-http/put :DELETE clj-http/delete} request-method)
         params (merge (lowername-keys params) (when page {:page page}) (when offset {:offset offset}))
-        credentials (make-credentials credentials request-method url params)
+        body-type (cond (and body (string? body)) :xml
+                        (and body (coll? body)) :json
+                        :else nil)
+        credentials (make-credentials credentials
+                                      request-method
+                                      url
+                                      (if (= :POST request-method)
+                                        (merge params
+                                               (case body-type
+                                                 :json {:json
+                                                        (json/write-str body :key-fn
+                                                         (comp lettercase/capitalized name))}
+                                                 :xml {:xml body}
+                                                 {}))
+                                        params))
         headers (merge {"Accept" "application/json"}
                        (when body {"Content-Type" "application/x-www-form-urlencoded"})
                        (when input-stream {"Content-Type" "application/pdf"})
                        (when modified-since {"If-Modified-Since" ""}))
-        body (when body (json/write-str body :key-fn (comp lettercase/capitalized name)))
+        body (case body-type
+              :json (json/write-str body :key-fn (comp lettercase/capitalized name))
+               
+              :xml body #_(URLEncoder/encode body "UTF-8")
+              
+              body)
         resp-key (if attachments (keyword (lettercase/lower attachments)) endpoint)
         query-params (merge credentials params)
-        {:keys [body status] :as resp} (do-request-for-auth-type request-fn url headers query-params body input-stream)]
+        {:keys [body status] :as resp} (do-request-for-auth-type request-fn url headers query-params body body-type input-stream)]
     (case status
       200 (->
            (json/read-str body :key-fn lettercase/lower-hyphen-keyword)
@@ -265,8 +296,12 @@
      ([ent] (f *current-credentials* ent))
      ([credentials ents]
       {:pre [(seq ents)]}
-      (let [decorated-ent (decorate-ents endpoint ents)]
-        (do-request :POST endpoint credentials :body decorated-ent))))})
+      (let [decorated-ent (cond
+                            (coll? ents) (decorate-ents endpoint ents)
+                            (string? ents) ents)]
+
+        (do-request :POST endpoint credentials :body decorated-ent))))
+
 
 
 (defmethod client-fns :attachments [action endpoint _]
