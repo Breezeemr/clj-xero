@@ -96,9 +96,10 @@
                     action-name
                     (if prefix (lettercase/lower-hyphen (name prefix)) "")
                     (if prefix "-" "")
-                    endpoint punc
+                    endpoint
                     (if postfix "-" "")
-                    (if postfix (lettercase/lower-hyphen (name postfix)) "")))))
+                    (if postfix (lettercase/lower-hyphen (name postfix)) "")
+                    punc))))
 
 ;;TODO: add partner url + way to work out with url to use
 
