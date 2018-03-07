@@ -1,9 +1,9 @@
-(defproject clj-xero "0.5.6-SNAPSHOT"
+(defproject com.breeze/clj-xero "0.5.7-SNAPSHOT"
   :description "Clojure wrapper for the Xero API"
   :url "https://bitbucket.org/icm-consulting/clj-xero"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
-  :dependencies [[org.clojure/clojure "1.6.0"]
+  :dependencies [[org.clojure/clojure "1.7.0"]
                  [org.clojure/data.json "0.2.6"]
                  [org.clojars.eraffoul/clj-oauth "1.5.6-20160815.051845-1"]
                  [org.tobereplaced/lettercase "1.0.0"]
