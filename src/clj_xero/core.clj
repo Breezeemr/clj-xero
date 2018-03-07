@@ -302,6 +302,36 @@
 
         (do-request :POST endpoint credentials :body decorated-ent))))
 
+   ;;update by id 
+   (with-meta
+     (fn-name action (inflections/singular endpoint) :postfix :by-guid)
+     {:doc (str "Add a new or update the given "
+                (name (inflections/singular endpoint))
+                " by the given guid")
+      :arglists [['guid (symbol (name endpoint))] ['credentials 'guid (symbol (name endpoint))]]})
+   (fn f
+     ([guid ent] (f *current-credentials* guid ent))
+     ([credentials guid ents]
+      (let [decorated-ent (cond
+                            (coll? ents) (decorate-ents endpoint ents)
+                            (string? ents) ents)]
+        (do-request :POST endpoint credentials :guid guid :body decorated-ent))))
+   
+   ;;update sub-item by id with options
+   (with-meta
+     (fn-name action (inflections/singular endpoint) :postfix :subitem-by-guid)
+     {:doc (str "Add a new or update the given "
+                (name (inflections/singular endpoint))
+                " by the given guid")
+      :arglists [['guid 'item (symbol (name endpoint))] ['credentials 'guid 'item (symbol (name endpoint))]]})
+   (fn f
+     ([guid item ent] (f *current-credentials* guid ent))
+     ([credentials guid item ents]
+      (:pre [(vector? item)])
+      (let [decorated-ent (cond
+                            (coll? ents) (decorate-ents endpoint ents)
+                            (string? ents) ents)]
+        (do-request :POST endpoint credentials :guid guid :item item :body ents))))})
 
 
 (defmethod client-fns :attachments [action endpoint _]
